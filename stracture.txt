@@ -1,0 +1,16 @@
+orchestra-backend/
+├── cmd/
+│   └── api/
+│       └── main.go
+├── internal/
+│   ├── handler/
+│   ├── service/
+│   ├── repository/
+│   └── model/
+├── migrations/
+│   └── 001_init.sql
+├── docker-compose.yml
+├── Dockerfile
+├── .env
+├── go.mod
+└── README.md (на английском!)
