@@ -1,4 +1,4 @@
-orchestra/
+orchestra-backend/
 ├── cmd/
 │   └── api/
 │       └── main.go
