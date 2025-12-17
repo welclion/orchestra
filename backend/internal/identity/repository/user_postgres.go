@@ -3,7 +3,7 @@ package repository
 
 import (
 	"database/sql"
-	"orchestra-backend/internal/identity/model"
+	"orchestra/backend/internal/identity/model"
 )
 
 // UserRepository — репозиторий для работы с пользователями в PostgreSQL.

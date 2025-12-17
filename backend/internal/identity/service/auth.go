@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"orchestra-backend/internal/identity/model"
-	"orchestra-backend/internal/identity/repository"
+	"orchestra/backend/internal/identity/model"
+	"orchestra/backend/internal/identity/repository"
 
 	"golang.org/x/crypto/bcrypt"
 )

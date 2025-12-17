@@ -1,4 +1,4 @@
-module orchestra-backend
+module orchestra/backend
 
 go 1.25
 
