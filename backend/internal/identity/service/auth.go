@@ -1,7 +1,7 @@
-// Пакет service содержит бизнес-логику для аутентификации.
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -11,19 +11,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AuthService — сервис для регистрации и входа.
 type AuthService struct {
 	repo *repository.UserRepository
 }
 
-// NewAuthService создаёт новый AuthService.
 func NewAuthService(repo *repository.UserRepository) *AuthService {
 	return &AuthService{repo: repo}
 }
 
-// Register регистрирует нового пользователя.
 func (s *AuthService) Register(email, password string) (*model.User, error) {
-	// Простая валидация
 	if email == "" || password == "" {
 		return nil, errors.New("email и пароль обязательны")
 	}
@@ -34,12 +30,30 @@ func (s *AuthService) Register(email, password string) (*model.User, error) {
 		return nil, errors.New("пароль должен быть не короче 6 символов")
 	}
 
-	// Хэшируем пароль
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, errors.New("ошибка хэширования пароля")
+		return nil, errors.New("ошибка хэширования")
 	}
 
-	// Сохраняем в БД
-	return s.repo.Create(email, string(passwordHash))
+	return s.repo.Create(email, string(hash))
+}
+
+func (s *AuthService) Login(email, password string) (*model.User, error) {
+	if email == "" || password == "" {
+		return nil, errors.New("email и пароль обязательны")
+	}
+
+	user, err := s.repo.FindByEmail(email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("неверный email или пароль")
+		}
+		return nil, errors.New("ошибка сервера")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return nil, errors.New("неверный email или пароль")
+	}
+
+	return user, nil
 }

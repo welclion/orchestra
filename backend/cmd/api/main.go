@@ -1,4 +1,3 @@
-// Точка входа в приложение ORCHESTRA.
 package main
 
 import (
@@ -9,48 +8,76 @@ import (
 	"orchestra/backend/internal/identity/handler"
 	"orchestra/backend/internal/identity/repository"
 	"orchestra/backend/internal/identity/service"
+	projecthandler "orchestra/backend/internal/project/handler"
+	projectrepo "orchestra/backend/internal/project/repository"
+	projectservice "orchestra/backend/internal/project/service"
 	"orchestra/backend/pkg/db"
 )
 
-func main() {
-	// Загружаем конфигурацию
-	cfg := config.LoadDBConfig()
-
-	// Подключаемся к БД
-	database := db.Connect(cfg.DSN())
-	defer database.Close()
-
-	// Инициализируем слои Identity
-	userRepo := repository.NewUserRepository(database)
-	authService := service.NewAuthService(userRepo)
-
-	// Регистрируем эндпоинты
-	http.HandleFunc("/health", enableCORS(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","service":"ORCHESTRA"}`))
-	}))
-
-	http.HandleFunc("/auth/register", enableCORS(handler.RegisterHandler(authService)))
-
-	// Запускаем сервер
-	log.Println("🚀 ORCHESTRA backend запущен на http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
-}
-
-func enableCORS(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Разрешаем только фронтенд
+// Глобальный CORS middleware
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		// Обрабатываем preflight-запрос (OPTIONS)
+		// Отвечаем на preflight
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func main() {
+	cfg := config.LoadDBConfig()
+	database := db.Connect(cfg.DSN())
+	defer database.Close()
+
+	// Identity
+	userRepo := repository.NewUserRepository(database)
+	authService := service.NewAuthService(userRepo)
+	jwtService := service.NewJWTService("orchestra-secret-key-2025")
+
+	// Project
+	projectRepo := projectrepo.NewProjectRepository(database)
+	projectService := projectservice.NewProjectService(projectRepo)
+	authMiddleware := handler.AuthMiddleware(jwtService)
+
+	// Все маршруты — через HandleFunc
+	mux := http.NewServeMux()
+
+	// Публичные маршруты
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+	mux.HandleFunc("/auth/register", handler.RegisterHandler(authService))
+	mux.HandleFunc("/auth/login", handler.LoginHandler(authService, jwtService))
+
+	// Защищённый маршрут /projects
+	mux.Handle("/projects", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := handler.GetUserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Пользователь не авторизован", http.StatusUnauthorized)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			projecthandler.GetProjectsHandler(projectService, userID).ServeHTTP(w, r)
+		case http.MethodPost:
+			projecthandler.CreateProjectHandler(projectService, userID).ServeHTTP(w, r)
+		default:
+			http.Error(w, "Метод не разрешён", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Оборачиваем ВЕСЬ mux в CORS
+	handler := corsMiddleware(mux)
+
+	log.Println("🚀 ORCHESTRA backend запущен на :8080")
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }

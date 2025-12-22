@@ -3,7 +3,7 @@ orchestra-backend/
 │   └── api/
 │       └── main.go
 ├── internal/
-│   └── identity/          ← ДОМЕН Identity
+│   └── identity/
 │       ├── model/
 │       │   └── user.go
 │       ├── repository/
@@ -13,9 +13,9 @@ orchestra-backend/
 │       └── handler/
 │           └── auth_handler.go
 ├── pkg/
-│   └── db/                ← общий db-инициализатор
+│   └── db/              
 ├── migrations/
 │   └── 001_identity.up.sql
 ├── docker-compose.yml
 ├── go.mod
-└── README.md (на английском)
+└── README.md
