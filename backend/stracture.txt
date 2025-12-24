@@ -1,7 +1,12 @@
-orchestra-backend/
+orchestra/backend/
 ├── cmd/
 │   └── api/
 │       └── main.go
+├── internal/project/
+│   └── repository/
+│   └── model/
+│   └── service/
+│   └── handler/
 ├── internal/
 │   └── identity/
 │       ├── model/
