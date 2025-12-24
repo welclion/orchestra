@@ -11,6 +11,9 @@ import (
 	projecthandler "orchestra/backend/internal/project/handler"
 	projectrepo "orchestra/backend/internal/project/repository"
 	projectservice "orchestra/backend/internal/project/service"
+	workflowhandler "orchestra/backend/internal/workflow/handler"
+	workflowrepo "orchestra/backend/internal/workflow/repository"
+	workflowservice "orchestra/backend/internal/workflow/service"
 	"orchestra/backend/pkg/db"
 )
 
@@ -21,12 +24,10 @@ func corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		// Отвечаем на preflight
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
@@ -44,9 +45,14 @@ func main() {
 	// Project
 	projectRepo := projectrepo.NewProjectRepository(database)
 	projectService := projectservice.NewProjectService(projectRepo)
+
+	// Workflow
+	workflowRepo := workflowrepo.NewWorkflowRepository(database)
+	workflowService := workflowservice.NewWorkflowService(workflowRepo)
+
 	authMiddleware := handler.AuthMiddleware(jwtService)
 
-	// Все маршруты — через HandleFunc
+	// Создаём маршрутизатор
 	mux := http.NewServeMux()
 
 	// Публичные маршруты
@@ -57,14 +63,13 @@ func main() {
 	mux.HandleFunc("/auth/register", handler.RegisterHandler(authService))
 	mux.HandleFunc("/auth/login", handler.LoginHandler(authService, jwtService))
 
-	// Защищённый маршрут /projects
+	// Защищённый маршрут: GET/POST /projects
 	mux.Handle("/projects", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := handler.GetUserFromContext(r.Context())
 		if !ok {
 			http.Error(w, "Пользователь не авторизован", http.StatusUnauthorized)
 			return
 		}
-
 		switch r.Method {
 		case http.MethodGet:
 			projecthandler.GetProjectsHandler(projectService, userID).ServeHTTP(w, r)
@@ -75,9 +80,24 @@ func main() {
 		}
 	})))
 
-	// Оборачиваем ВЕСЬ mux в CORS
-	handler := corsMiddleware(mux)
+	// Защищённый маршрут: POST /stages (временное решение)
+	mux.Handle("/stages", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Только POST", http.StatusMethodNotAllowed)
+			return
+		}
+		userID, ok := handler.GetUserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Пользователь не авторизован", http.StatusUnauthorized)
+			return
+		}
+		// Передаём userID и workflowService в хендлер
+		workflowhandler.CreateStageHandler(workflowService, userID).ServeHTTP(w, r)
+	})))
+
+	// Оборачиваем всё в CORS
+	finalHandler := corsMiddleware(mux)
 
 	log.Println("🚀 ORCHESTRA backend запущен на :8080")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	log.Fatal(http.ListenAndServe(":8080", finalHandler))
 }
